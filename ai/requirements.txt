@@ -1,0 +1,16 @@
+# Core
+numpy>=1.24.0
+Pillow>=10.0.0
+opencv-python>=4.8.0
+
+# Deep Learning (start with CPU; GPU optional)
+torch>=2.0.0
+torchvision>=0.15.0
+
+# AI Models
+rembg>=2.0.50          # Background removal
+onnxruntime>=1.16.0    # Fast model inference
+
+# Utilities
+tqdm>=4.66.0
+python-dotenv>=1.0.0
