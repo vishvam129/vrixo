@@ -85,8 +85,14 @@ filterwarnings = [
 
 # ----- Coverage -----
 [tool.coverage.run]
-source = ["ai"]
-omit = ["tests/*", "venv/*", "*/__init__.py"]
+source = ["ai", "web"]
+omit = [
+    "tests/*",
+    "venv/*",
+    "*/__init__.py",
+    "web/app.py",               # Streamlit entrypoint, requires server
+    "tests/fixtures/*",         # fixture generator, not production code
+]
 branch = true
 
 [tool.coverage.report]
