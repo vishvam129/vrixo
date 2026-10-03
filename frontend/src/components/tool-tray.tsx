@@ -57,12 +57,15 @@ export function ToolTray({
   onRun,
   disabledReason,
   running,
+  fixedOptions = false,
 }: {
   tool: ToolState;
   onChange: (tool: ToolState) => void;
   onRun: () => void;
   disabledReason: string | null;
   running: boolean;
+  /** Demo mode: results are pre-made, so the options cannot change them. */
+  fixedOptions?: boolean;
 }) {
   const selected = OPERATIONS.find((operation) => operation.id === tool.operation)!;
 
@@ -103,7 +106,13 @@ export function ToolTray({
         })}
       </div>
 
-      {tool.operation === "upscale" && (
+      {fixedOptions && tool.operation === "upscale" && (
+        <p className="mt-5 text-sm text-graphite">
+          The sample was upscaled 4× with face restoration on.
+        </p>
+      )}
+
+      {!fixedOptions && tool.operation === "upscale" && (
         <div className="mt-5 grid gap-4">
           <fieldset>
             <legend className="text-sm font-medium">How much larger</legend>
@@ -133,7 +142,7 @@ export function ToolTray({
         </div>
       )}
 
-      {tool.operation === "restore" && (
+      {!fixedOptions && tool.operation === "restore" && (
         <div className="mt-5 grid gap-4">
           <Toggle
             id="repair-scratches"

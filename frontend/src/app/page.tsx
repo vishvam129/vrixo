@@ -4,11 +4,13 @@ import { useCallback, useEffect, useState } from "react";
 import { AuthScreen } from "@/components/auth-screen";
 import { Workspace } from "@/components/workspace";
 import { api, token, type User } from "@/lib/api";
+import { DEMO } from "@/lib/demo";
 
 type Session = { state: "checking" } | { state: "signed-out" } | { state: "signed-in"; user: User };
 
 /** Who is signed in, judging by the stored token (cleared if the server rejects it). */
 async function currentSession(): Promise<Session> {
+  if (DEMO) return { state: "signed-in", user: await api.me() }; // no accounts in the demo
   if (!token.get()) return { state: "signed-out" };
   try {
     return { state: "signed-in", user: await api.me() };

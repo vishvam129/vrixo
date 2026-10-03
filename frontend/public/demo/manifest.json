@@ -1,0 +1,44 @@
+{
+  "photo": {
+    "filename": "astronaut.jpg",
+    "width": 256,
+    "height": 256,
+    "size_bytes": 15505
+  },
+  "results": {
+    "remove_background": {
+      "params": {
+        "model": "u2net"
+      },
+      "duration_ms": 1638,
+      "file": "remove_background.png"
+    },
+    "upscale": {
+      "params": {
+        "scale": 4,
+        "face_optimized": true,
+        "engine": "auto"
+      },
+      "duration_ms": 70117,
+      "file": "upscale.jpg"
+    },
+    "enhance_faces": {
+      "params": {},
+      "duration_ms": 4127,
+      "file": "enhance_faces.png"
+    },
+    "restore": {
+      "params": {
+        "colorize": true,
+        "repair_scratches": true
+      },
+      "duration_ms": 4172,
+      "file": "restore.png"
+    },
+    "remove_object": {
+      "params": {},
+      "duration_ms": 6869,
+      "file": "remove_object.png"
+    }
+  }
+}

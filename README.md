@@ -4,6 +4,8 @@
 
 Vrixo is an AI photo tool: upload a photo and remove its background, upscale it, restore faces, repair old photos, or remove unwanted objects.
 
+**Demo:** [vrixo-demo.vercel.app](https://vrixo-demo.vercel.app) — the real interface on one sample photo. Each result there was produced by the models in this repo and saved; the backend (PostgreSQL, Redis, and a worker that needs ~2 GB for the models) is not hosted, so nothing is processed live. Run the stack below to use your own photos.
+
 ---
 
 ## What works today
@@ -149,6 +151,7 @@ cd frontend && pnpm install
 pnpm dev                             # http://localhost:3000
 ```
 
+`NEXT_PUBLIC_DEMO=1` builds the server-less sample demo (`frontend/src/lib/demo.ts`).
 `NEXT_PUBLIC_API_URL` points it at a different API; `VRIXO_CORS_ORIGINS` on the
 backend lists the origins allowed to call it.
 

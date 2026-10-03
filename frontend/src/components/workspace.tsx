@@ -7,21 +7,19 @@ import { toast } from "sonner";
 import { FilmStrip, STATUS_LABEL } from "@/components/film-strip";
 import { ACCEPTED, Compare, DropZone } from "@/components/light-table";
 import { DEFAULT_TOOL, paramsFor, ToolTray, type ToolState } from "@/components/tool-tray";
-import { api, ApiError, token, type Job, type Upload, type User } from "@/lib/api";
+import { api, describeError, token, type Job, type Upload, type User } from "@/lib/api";
+import { DEMO, DEMO_UPLOAD, REPO_URL } from "@/lib/demo";
 import { operationById } from "@/lib/operations";
 import { clearImageCache, useImage } from "@/lib/use-image";
 
 const MAX_BYTES = 10 * 1024 * 1024;
 const isActive = (job: Job) => job.status === "queued" || job.status === "running";
 
-function describe(error: unknown): string {
-  return error instanceof ApiError ? error.message : "Something went wrong. Try again.";
-}
-
 export function Workspace({ user, onSignedOut }: { user: User; onSignedOut: () => void }) {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [draft, setDraft] = useState<Upload | null>(null); // uploaded, nothing run on it yet
+  // uploaded, nothing run on it yet (the demo starts with its sample photo on the table)
+  const [draft, setDraft] = useState<Upload | null>(DEMO ? DEMO_UPLOAD : null);
   const [tool, setTool] = useState<ToolState>(DEFAULT_TOOL);
   const [uploading, setUploading] = useState(false);
   const [sending, setSending] = useState(false);
@@ -55,7 +53,7 @@ export function Workspace({ user, onSignedOut }: { user: User; onSignedOut: () =
         absorb(loaded);
         if (loaded.length > 0) setSelectedId(loaded[0].id);
       })
-      .catch((error) => toast.error(describe(error)));
+      .catch((error) => toast.error(describeError(error)));
   }, [absorb]);
 
   // while something is waiting or working, ask the server once a second
@@ -82,7 +80,7 @@ export function Workspace({ user, onSignedOut }: { user: User; onSignedOut: () =
       setDraft(await api.upload(file));
       setSelectedId(null);
     } catch (error) {
-      toast.error(describe(error));
+      toast.error(describeError(error));
     } finally {
       setUploading(false);
     }
@@ -98,8 +96,9 @@ export function Workspace({ user, onSignedOut }: { user: User; onSignedOut: () =
       setSelectedId(job.id);
       setDraft(null);
       setNow(Date.now());
+      if (job.status === "succeeded") toast(operationById(job.operation).done); // already finished
     } catch (error) {
-      toast.error(describe(error));
+      toast.error(describeError(error));
     } finally {
       setSending(false);
     }
@@ -125,22 +124,38 @@ export function Workspace({ user, onSignedOut }: { user: User; onSignedOut: () =
       <header className="flex items-center gap-4 border-b border-border px-5 py-3">
         <p className="font-display text-2xl leading-none font-semibold tracking-wide">Vrixo</p>
         <p className="ml-auto hidden truncate text-sm text-graphite sm:block">{user.email}</p>
-        <button
-          type="button"
-          onClick={signOut}
-          className="text-sm font-medium underline underline-offset-4"
-        >
-          Sign out
-        </button>
+        {DEMO ? (
+          <a href={REPO_URL} className="text-sm font-medium underline underline-offset-4">
+            Source on GitHub
+          </a>
+        ) : (
+          <button
+            type="button"
+            onClick={signOut}
+            className="text-sm font-medium underline underline-offset-4"
+          >
+            Sign out
+          </button>
+        )}
       </header>
 
-      <div className="grid gap-x-6 gap-y-5 px-5 py-5 lg:grid-cols-[176px_minmax(0,1fr)_300px]">
-        <div className="order-3 -mx-5 lg:order-1 lg:mx-0">
+      <div className="grid grid-cols-1 gap-x-6 gap-y-5 px-5 py-5 lg:grid-cols-[176px_minmax(0,1fr)_300px]">
+        <div className="order-3 -mx-5 min-w-0 lg:order-1 lg:mx-0">
           <FilmStrip jobs={jobs} selectedId={selectedId} onSelect={setSelectedId} />
         </div>
 
         <main className="order-1 min-w-0 lg:order-2">
           <h1 className="sr-only">Your photo</h1>
+          {DEMO && (
+            <p className="mb-4 border-l-4 border-signal bg-surface px-4 py-3 text-sm">
+              This is a demo with one sample photo. Each result was made by Vrixo&apos;s models and
+              saved; nothing is processed here.{" "}
+              <a href={`${REPO_URL}#getting-started`} className="font-medium underline underline-offset-4">
+                Run it on your machine
+              </a>{" "}
+              to use your own photos.
+            </p>
+          )}
           <div className="relative h-[min(62vh,640px)] min-h-72 border border-border bg-surface">
             {!photo && <DropZone onFile={addPhoto} busy={uploading} />}
 
@@ -183,6 +198,9 @@ export function Workspace({ user, onSignedOut }: { user: User; onSignedOut: () =
             )}
           </div>
 
+          {DEMO && (
+            <p className="mt-2 text-xs text-graphite">Sample photo: NASA, public domain.</p>
+          )}
           {photo && (
             <div className="mt-4 flex flex-wrap items-start gap-x-10 gap-y-4">
               <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
@@ -197,6 +215,7 @@ export function Workspace({ user, onSignedOut }: { user: User; onSignedOut: () =
                     <dt className="text-graphite">Result</dt>
                     <dd>
                       {operation.done} in {((selected.duration_ms ?? 0) / 1000).toFixed(1)} s
+                      {DEMO && " when it was recorded, on a laptop CPU"}
                     </dd>
                   </>
                 )}
@@ -206,12 +225,13 @@ export function Workspace({ user, onSignedOut }: { user: User; onSignedOut: () =
                 {result && selected && (
                   <a
                     href={result}
-                    download={`vrixo-${selected.operation}.png`}
+                    download={`vrixo-${selected.operation}.${result.endsWith(".jpg") ? "jpg" : "png"}`}
                     className="grid h-11 place-items-center bg-ink px-5 font-medium text-surface hover:bg-ink/85"
                   >
                     Download result
                   </a>
                 )}
+                {!DEMO && (
                 <label className="grid h-11 cursor-pointer place-items-center border border-ink px-5 font-medium hover:bg-surface has-focus-visible:outline-2">
                   {uploading ? "Uploading…" : "Use another photo"}
                   <input
@@ -226,6 +246,7 @@ export function Workspace({ user, onSignedOut }: { user: User; onSignedOut: () =
                     }}
                   />
                 </label>
+                )}
               </div>
             </div>
           )}
@@ -238,6 +259,7 @@ export function Workspace({ user, onSignedOut }: { user: User; onSignedOut: () =
             onRun={run}
             running={sending}
             disabledReason={photo ? null : "Add a photo first."}
+            fixedOptions={DEMO}
           />
         </aside>
       </div>
