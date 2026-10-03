@@ -23,8 +23,9 @@ Also built: a Streamlit web UI with before/after comparison, email + password ac
 ## Tech stack (built)
 
 - **Python 3.11+**, PyTorch, ONNX Runtime, OpenCV, Pillow, rembg
-- **Streamlit** web UI · **SQLite** for accounts and quotas
-- **pytest** · ruff · Docker
+- **FastAPI** API · **SQLAlchemy 2 + PostgreSQL** (Alembic migrations) · **Celery + Redis** job queue
+- **Streamlit** web UI (standalone, SQLite accounts and quotas)
+- **pytest** · ruff · Docker Compose
 
 ## Planned
 
@@ -34,7 +35,7 @@ The roadmap below moves Vrixo from a single Streamlit app to a web product:
 - [x] Stage 2: Upscaling + face enhancement
 - [x] Stage 3: Streamlit web UI, accounts, quotas
 - [x] Stage 3.5: Real neural models — Real-ESRGAN, GFPGAN, LaMa
-- [ ] Stage 4: FastAPI backend — upload / job / result endpoints, SQLAlchemy + PostgreSQL, Celery + Redis job queue
+- [x] Stage 4: FastAPI backend — upload / job / result endpoints, SQLAlchemy + PostgreSQL, Celery + Redis job queue
 - [ ] Stage 5: Object storage (Cloudflare R2) and Supabase auth
 - [ ] Stage 6: Next.js + Tailwind + shadcn/ui frontend
 - [ ] Stage 7: Cloud deployment
@@ -49,11 +50,16 @@ vrixo/
 ├── ai/
 │   ├── models/       # one module per pipeline + weights registry
 │   └── utils/        # image loading / saving / resizing helpers
+├── backend/          # FastAPI app, SQLAlchemy models, Celery task, storage
+├── migrations/       # Alembic migrations
+├── scripts/e2e.py    # end-to-end check against the running stack
 ├── web/              # Streamlit app, auth, quotas, watermark, health
 ├── tests/            # pytest suite (+ fixtures)
 ├── docs/             # feature list, deployment notes
 ├── models_cache/     # downloaded weights (git-ignored)
-└── Dockerfile
+├── docker-compose.yml  # db + redis + migrate + api + worker
+├── Dockerfile.backend
+└── Dockerfile          # Streamlit image
 ```
 
 ---
@@ -75,6 +81,55 @@ streamlit run web/app.py                 # http://localhost:8501
 ```
 
 No GPU is required. On CPU, Real-ESRGAN takes roughly a second per 192 px tile, so "auto" mode uses it for images up to 1024 px on the long side.
+
+### Backend API (FastAPI + Celery)
+
+Image processing is slow, so the API never does it in the request. It stores
+the upload, writes a job row, publishes the job id to Redis and returns `202`;
+a separate worker process runs the model and records the outcome in PostgreSQL.
+
+```
+client ──POST /uploads──▶ API ──▶ storage
+client ──POST /jobs─────▶ API ──▶ PostgreSQL (job: queued) ──▶ Redis
+                                        ▲                        │
+client ──GET /jobs/{id}─▶ API ──────────┘        worker ◀────────┘
+client ──GET /jobs/{id}/result ◀── storage ◀──── runs the model, marks succeeded / failed
+```
+
+```bash
+docker compose up -d --build        # PostgreSQL, Redis, migrations, API, worker
+python scripts/e2e.py               # sign up → upload → 3 jobs → download results
+open http://127.0.0.1:58000/docs    # interactive API docs
+docker compose down                 # stop (add -v to delete the data too)
+```
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /auth/signup`, `POST /auth/login`, `GET /auth/me` | accounts (PBKDF2 passwords, JWT access tokens) |
+| `POST /uploads` | store an image — validated from its bytes, size- and pixel-limited |
+| `POST /jobs` | queue an operation: `remove_background`, `upscale`, `enhance_faces`, `restore`, `remove_object` |
+| `GET /jobs`, `GET /jobs/{id}` | list / poll (`queued → running → succeeded \| failed`, with duration and error) |
+| `GET /jobs/{id}/result` | download the result image |
+| `GET /health` | liveness + database check |
+
+Design notes:
+
+- **Admission control.** Before a job is accepted the API checks the user's daily
+  limit, their number of active jobs (`429`, `Retry-After`) and the global queue
+  depth (`503`), so a burst cannot bury the single worker.
+- **At-least-once delivery, exactly-once processing.** The worker acknowledges a
+  message only after finishing (`acks_late`), so a crashed worker's job is
+  redelivered; the `queued → running` transition is one conditional `UPDATE`, so a
+  redelivered or duplicate message cannot run a job twice.
+- **Failures are data.** A crashing model marks the job `failed` with the error;
+  the worker keeps running. If Redis is unreachable the job is failed immediately
+  instead of being left `queued` forever.
+- **Parameters are validated at submission** (Pydantic, per operation), not in the worker.
+- The compose stack binds only to `127.0.0.1` on non-default ports and caps each
+  service's memory (worker: 3 GB, one job at a time).
+
+Without Docker: `uvicorn backend.main:app --reload` uses SQLite, and
+`VRIXO_CELERY_ALWAYS_EAGER=1` runs jobs inline — this is how the API tests run.
 
 ### Command line
 

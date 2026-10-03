@@ -1,0 +1,27 @@
+# Vrixo API + worker image (one image, two commands — see docker-compose.yml)
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 PYTHONPATH=/app
+WORKDIR /app
+
+# libgomp: OpenMP runtime used by torch / onnxruntime
+RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY ai/requirements.txt ai/requirements.txt
+COPY backend/requirements.txt backend/requirements.txt
+# CPU-only torch keeps the image ~1.5 GB smaller than the default CUDA build
+RUN pip install --index-url https://download.pytorch.org/whl/cpu torch \
+    && pip install -r ai/requirements.txt -r backend/requirements.txt
+
+COPY alembic.ini ./
+COPY migrations migrations
+COPY ai ai
+COPY backend backend
+
+RUN useradd --create-home --uid 1000 vrixo && mkdir -p /data/storage /data/models \
+    && chown -R vrixo:vrixo /data
+USER vrixo
+
+EXPOSE 8000
+CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]

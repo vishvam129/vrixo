@@ -1,0 +1,11 @@
+# Vrixo API + worker
+fastapi>=0.115
+uvicorn[standard]>=0.30
+python-multipart>=0.0.9      # file uploads
+pydantic-settings>=2.4
+SQLAlchemy>=2.0
+psycopg[binary]>=3.2         # PostgreSQL driver
+alembic>=1.13                # schema migrations
+celery[redis]>=5.4           # job queue
+PyJWT>=2.9
+pydantic[email]>=2.8

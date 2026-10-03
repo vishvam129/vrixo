@@ -1,0 +1,100 @@
+# Vrixo backend stack: PostgreSQL + Redis + API + worker.
+#
+#   docker compose up -d --build      # start
+#   docker compose logs -f worker     # watch jobs
+#   docker compose down               # stop (add -v to also delete the data)
+#
+# Everything is namespaced under the "vrixo" project and published only on
+# 127.0.0.1 with non-default ports, so it cannot collide with other stacks on
+# the same machine. Memory limits stop the model worker from starving them.
+name: vrixo
+
+x-app: &app
+  build:
+    context: .
+    dockerfile: Dockerfile.backend
+  image: vrixo-backend:dev
+  environment: &app-env
+    VRIXO_DATABASE_URL: postgresql+psycopg://vrixo:vrixo@db:5432/vrixo
+    VRIXO_REDIS_URL: redis://redis:6379/0
+    VRIXO_STORAGE_DIR: /data/storage
+    VRIXO_MODELS_DIR: /data/models
+    VRIXO_ENV: production
+    VRIXO_JWT_SECRET: ${VRIXO_JWT_SECRET:-local-compose-secret-not-for-real-deployments-0001}
+  volumes:
+    - storage:/data/storage
+    - ./models_cache:/data/models:ro   # weights downloaded on the host, read-only here
+  depends_on:
+    db: { condition: service_healthy }
+    redis: { condition: service_healthy }
+  restart: unless-stopped
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: vrixo
+      POSTGRES_PASSWORD: vrixo
+      POSTGRES_DB: vrixo
+    ports: ["127.0.0.1:55432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vrixo -d vrixo"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    mem_limit: 512m
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "96mb", "--maxmemory-policy", "noeviction"]
+    ports: ["127.0.0.1:56379:6379"]
+    volumes: [redisdata:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    mem_limit: 128m
+    restart: unless-stopped
+
+  migrate:
+    <<: *app
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    mem_limit: 512m
+
+  api:
+    <<: *app
+    command: ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports: ["127.0.0.1:58000:8000"]
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    mem_limit: 768m
+
+  worker:
+    <<: *app
+    # one job at a time: the models are CPU- and memory-heavy
+    command: ["celery", "-A", "backend.queue", "worker", "--loglevel=info", "--concurrency=1", "--pool=solo"]
+    environment:
+      <<: *app-env
+      OMP_NUM_THREADS: "4"
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+    mem_limit: 3g
+    cpus: 4
+
+volumes:
+  pgdata:
+  redisdata:
+  storage:

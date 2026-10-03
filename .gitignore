@@ -142,3 +142,6 @@ secrets/
 .secrets/
 credentials.json
 service-account.json
+
+# backend local data
+storage/
