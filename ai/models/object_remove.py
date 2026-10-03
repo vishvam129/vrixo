@@ -1,8 +1,7 @@
 """Object removal — Vrixo AI feature.
 
-Uses OpenCV inpainting (TELEA / NS algorithms) as the MVP backend.
-A future revision will swap to LaMa for higher-quality results when
-model weights are downloaded.
+Fills the masked region with LaMa (``ai.models.lama``) when its weights are
+installed, and falls back to OpenCV TELEA inpainting otherwise.
 
 Features:
     #26 Object removal with mask input
@@ -21,6 +20,7 @@ import cv2
 import numpy as np
 from PIL import Image
 
+from ai.models.weights import is_available
 from ai.utils.image_utils import load_image, save_image
 
 
@@ -70,7 +70,7 @@ def remove_object(
         output_path: Destination for the result.
         mask_path: Optional mask (white = remove). If None and auto=True, auto-detect.
         auto: Auto-detect the most prominent object.
-        radius: Inpainting radius.
+        radius: Inpainting radius (OpenCV fallback only).
 
     Returns:
         Path to the output image.
@@ -94,9 +94,14 @@ def remove_object(
     mask_padded = cv2.copyMakeBorder(mask, 1, 1, 1, 1, cv2.BORDER_CONSTANT, value=0)
     rgb_padded = cv2.copyMakeBorder(rgb, 1, 1, 1, 1, cv2.BORDER_REPLICATE)
 
-    inpainted = cv2.inpaint(rgb_padded, mask_padded, radius, cv2.INPAINT_TELEA)
-    # Crop back to original size
-    inpainted = inpainted[1:-1, 1:-1]
+    if is_available("lama"):
+        from ai.models.lama import inpaint
+
+        inpainted = inpaint(rgb, mask)
+    else:
+        inpainted = cv2.inpaint(rgb_padded, mask_padded, radius, cv2.INPAINT_TELEA)
+        # Crop back to original size
+        inpainted = inpainted[1:-1, 1:-1]
 
     result = Image.fromarray(inpainted).convert("RGBA")
     save_image(result, Path(output_path))

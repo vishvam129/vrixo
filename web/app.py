@@ -21,6 +21,7 @@ from ai.models.face_enhance import enhance_faces
 from ai.models.object_remove import remove_object
 from ai.models.restoration import restore_photo
 from ai.models.upscaler import upscale_image
+from ai.models.weights import is_available
 from web.auth import current_user, login_form, signup_form
 from web.quota import decrement_quota, get_remaining_quota
 from web.watermark import apply_watermark
@@ -188,6 +189,11 @@ elif feature == "✂️ Remove background":
 elif feature == "🔍 Upscale (HD)":
     st.subheader("Upscale to HD / 4K")
     if require_upload():
+        st.caption(
+            "Engine: Real-ESRGAN x4 (neural)"
+            if is_available("realesrgan_x4")
+            else "Engine: LANCZOS resampling — install model weights for Real-ESRGAN"
+        )
         scale = st.radio("Upscale factor", [2, 4, 8], horizontal=True, index=1)
         face_opt = st.checkbox("Face-optimized enhancement", value=False)
         clicked = st.button("🔍 Upscale", type="primary")
@@ -207,6 +213,11 @@ elif feature == "🔍 Upscale (HD)":
 elif feature == "😊 Face enhance":
     st.subheader("Enhance faces")
     if require_upload():
+        st.caption(
+            "Engine: GFPGAN v1.4 face restoration (neural)"
+            if is_available("gfpgan", "yunet")
+            else "Engine: sharpening filter — install model weights for GFPGAN"
+        )
         clicked = st.button("😊 Enhance faces", type="primary")
         if clicked and has_quota():
             with st.spinner("⚙️ Enhancing faces..."):
@@ -254,6 +265,11 @@ elif feature == "🧽 Remove object":
     st.subheader("Remove unwanted objects")
     if require_upload():
         st.info("🤖 Auto-detect mode: Vrixo will find and remove the most prominent object.")
+        st.caption(
+            "Engine: LaMa inpainting (neural)"
+            if is_available("lama")
+            else "Engine: OpenCV inpainting — install model weights for LaMa"
+        )
         clicked = st.button("🧽 Remove auto-detected object", type="primary")
         if clicked and has_quota():
             with st.spinner("⚙️ Removing object..."):

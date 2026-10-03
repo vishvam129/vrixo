@@ -1,11 +1,10 @@
 # Core
 numpy>=1.24.0
 Pillow>=10.0.0
-opencv-python>=4.8.0
+opencv-python-headless>=4.8.0,<5   # 5.x drops CascadeClassifier (Haar fallback)
 
 # Deep Learning (start with CPU; GPU optional)
-torch>=2.0.0
-torchvision>=0.15.0
+torch>=2.0.0           # Real-ESRGAN (RRDBNet) + LaMa (TorchScript); CPU wheel is enough
 
 # AI Models
 rembg>=2.0.50          # Background removal
