@@ -51,6 +51,7 @@ class JobOut(BaseModel):
 
     id: str
     upload_id: str
+    upload: UploadOut
     operation: str
     params: dict[str, Any]
     status: JobStatus

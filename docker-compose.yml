@@ -87,6 +87,7 @@ services:
     environment:
       <<: *app-env
       OMP_NUM_THREADS: "4"
+      MALLOC_ARENA_MAX: "2"   # fewer glibc arenas → freed model memory is returned sooner
     depends_on:
       db: { condition: service_healthy }
       redis: { condition: service_healthy }

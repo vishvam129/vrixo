@@ -9,6 +9,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
 from backend.config import DEFAULT_JWT_SECRET, get_settings
@@ -33,6 +34,16 @@ def create_app() -> FastAPI:
         version="0.2.0",
         description="Upload a photo, submit an image job, poll it, download the result.",
         lifespan=lifespan,
+    )
+    origins = [
+        origin.strip() for origin in get_settings().cors_origins.split(",") if origin.strip()
+    ]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,
+        allow_methods=["GET", "POST"],
+        allow_headers=["Authorization", "Content-Type"],
+        expose_headers=["Retry-After"],
     )
     app.include_router(auth.router)
     app.include_router(uploads.router)

@@ -6,6 +6,7 @@ import io
 import uuid
 
 from fastapi import APIRouter, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
 from PIL import Image, UnidentifiedImageError
 
 from backend.config import get_settings
@@ -71,3 +72,17 @@ async def create_upload(file: UploadFile, user: CurrentUser, db: DbSession) -> U
     db.add(upload)
     db.commit()
     return upload
+
+
+MEDIA_TYPES = {"JPEG": "image/jpeg", "PNG": "image/png", "WEBP": "image/webp"}
+
+
+@router.get("/{upload_id}/file")
+def get_upload_file(upload_id: str, user: CurrentUser, db: DbSession) -> FileResponse:
+    """The original image, for before / after comparison."""
+    upload = db.get(Upload, upload_id)
+    if upload is None or upload.user_id != user.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Upload not found")
+    return FileResponse(
+        get_storage().local_path(upload.storage_key), media_type=MEDIA_TYPES[upload.image_format]
+    )

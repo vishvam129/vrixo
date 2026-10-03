@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     job_soft_time_limit_s: int = 300
     celery_always_eager: bool = False  # run tasks inline (tests, no Redis needed)
 
+    # browser origins allowed to call the API (comma-separated)
+    cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

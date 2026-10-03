@@ -24,6 +24,7 @@ Also built: a Streamlit web UI with before/after comparison, email + password ac
 
 - **Python 3.11+**, PyTorch, ONNX Runtime, OpenCV, Pillow, rembg
 - **FastAPI** API · **SQLAlchemy 2 + PostgreSQL** (Alembic migrations) · **Celery + Redis** job queue
+- **Next.js** + Tailwind + shadcn/ui frontend
 - **Streamlit** web UI (standalone, SQLite accounts and quotas)
 - **pytest** · ruff · Docker Compose
 
@@ -37,7 +38,7 @@ The roadmap below moves Vrixo from a single Streamlit app to a web product:
 - [x] Stage 3.5: Real neural models — Real-ESRGAN, GFPGAN, LaMa
 - [x] Stage 4: FastAPI backend — upload / job / result endpoints, SQLAlchemy + PostgreSQL, Celery + Redis job queue
 - [ ] Stage 5: Object storage (Cloudflare R2) and Supabase auth
-- [ ] Stage 6: Next.js + Tailwind + shadcn/ui frontend
+- [x] Stage 6: Next.js + Tailwind + shadcn/ui frontend (sign in, upload, run a tool, compare, download, history)
 - [ ] Stage 7: Cloud deployment
 - [ ] Stage 8: Payments · mobile app
 
@@ -51,6 +52,7 @@ vrixo/
 │   ├── models/       # one module per pipeline + weights registry
 │   └── utils/        # image loading / saving / resizing helpers
 ├── backend/          # FastAPI app, SQLAlchemy models, Celery task, storage
+├── frontend/         # Next.js + Tailwind + shadcn/ui web app
 ├── migrations/       # Alembic migrations
 ├── scripts/e2e.py    # end-to-end check against the running stack
 ├── web/              # Streamlit app, auth, quotas, watermark, health
@@ -127,9 +129,28 @@ Design notes:
 - **Parameters are validated at submission** (Pydantic, per operation), not in the worker.
 - The compose stack binds only to `127.0.0.1` on non-default ports and caps each
   service's memory (worker: 3 GB, one job at a time).
+- **Bounded worker memory.** The worker drops its cached models after every job
+  (`ai/models/memory.py`); keeping all four loaded pushed it into its memory
+  limit and made jobs swap.
 
 Without Docker: `uvicorn backend.main:app --reload` uses SQLite, and
 `VRIXO_CELERY_ALWAYS_EAGER=1` runs jobs inline — this is how the API tests run.
+
+### Frontend (Next.js)
+
+`frontend/` is a Next.js + Tailwind + shadcn/ui app that talks to the API:
+sign in, drop a photo on the light table, pick one of the five tools, watch the
+job move through the queue, compare before / after, download. Past jobs line
+up as frames on a strip of film.
+
+```bash
+docker compose up -d                 # the API it talks to (http://127.0.0.1:58000)
+cd frontend && pnpm install
+pnpm dev                             # http://localhost:3000
+```
+
+`NEXT_PUBLIC_API_URL` points it at a different API; `VRIXO_CORS_ORIGINS` on the
+backend lists the origins allowed to call it.
 
 ### Command line
 

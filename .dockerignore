@@ -23,3 +23,5 @@ uploads/
 models_cache/
 *.sqlite
 *.db
+frontend/
+storage/

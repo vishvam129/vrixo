@@ -21,11 +21,14 @@ from typing import Literal
 
 from rembg import new_session, remove
 
+from ai.models import weights
 from ai.utils.image_utils import load_image, resize_if_too_large, save_image
 
 ModelName = Literal["u2net", "u2netp", "u2net_human_seg", "isnet-general-use", "birefnet-general"]
 
-MODELS_DIR = Path(os.environ.get("REMBG_HOME", "./models_cache/rembg"))
+# rembg models live beside the other weights (models_cache/rembg by default,
+# or under VRIXO_MODELS_DIR), unless REMBG_HOME points somewhere else
+MODELS_DIR = Path(os.environ.get("REMBG_HOME") or weights.MODELS_DIR / "rembg")
 MAX_INPUT_SIDE = 4096  # pixels — larger images get auto-downsized first
 
 # Session cache to avoid re-loading the ONNX model for every call
@@ -34,7 +37,8 @@ _SESSION_CACHE: dict[str, object] = {}
 
 def _get_session(model_name: str) -> object:
     """Return a cached rembg session for the given model name."""
-    MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    if not MODELS_DIR.is_dir():  # may be a read-only mount that already exists
+        MODELS_DIR.mkdir(parents=True, exist_ok=True)
     os.environ["U2NET_HOME"] = str(MODELS_DIR)  # rembg reads this env var
     if model_name not in _SESSION_CACHE:
         _SESSION_CACHE[model_name] = new_session(model_name)

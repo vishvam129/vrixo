@@ -159,6 +159,24 @@ def test_upload_rejects_unsupported_format(client: TestClient) -> None:
     assert response.status_code == 415
 
 
+def test_original_file_can_be_fetched_by_its_owner_only(client: TestClient) -> None:
+    alice, bob = _signup(client, "alice@example.com"), _signup(client, "bob@example.com")
+    data = _png((20, 10))
+    upload_id = _upload(client, alice, data)
+
+    mine = client.get(f"/uploads/{upload_id}/file", headers=alice)
+    assert mine.status_code == 200 and mine.content == data
+    assert mine.headers["content-type"] == "image/png"
+    assert client.get(f"/uploads/{upload_id}/file", headers=bob).status_code == 404
+
+
+def test_cors_allows_the_configured_frontend_only(client: TestClient) -> None:
+    allowed = client.get("/health", headers={"Origin": "http://localhost:3000"})
+    assert allowed.headers["access-control-allow-origin"] == "http://localhost:3000"
+    other = client.get("/health", headers={"Origin": "https://evil.example"})
+    assert "access-control-allow-origin" not in other.headers
+
+
 # -------------------------------------------------------------------------- jobs
 
 
@@ -176,6 +194,7 @@ def test_job_runs_and_result_is_downloadable(client: TestClient) -> None:
     assert job["status"] == "succeeded"  # eager mode: already processed
     assert job["params"] == {"scale": 2, "face_optimized": False, "engine": "auto"}
     assert job["duration_ms"] is not None and job["started_at"] and job["finished_at"]
+    assert job["upload"]["filename"] == "photo.png" and job["upload"]["width"] == 48
 
     result = client.get(f"/jobs/{job['id']}/result", headers=headers)
     assert result.status_code == 200 and result.headers["content-type"] == "image/png"

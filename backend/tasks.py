@@ -9,6 +9,7 @@ from pathlib import Path
 from celery.exceptions import SoftTimeLimitExceeded
 from sqlalchemy import update
 
+from ai.models.memory import release_models
 from backend.db import get_sessionmaker
 from backend.models import Job, JobStatus, utcnow
 from backend.pipelines import run_operation
@@ -55,6 +56,9 @@ def process_job(job_id: str) -> str:
         status, error = JobStatus.FAILED, "job exceeded the time limit"
     except Exception as exc:  # the job is marked failed; the worker keeps running
         status, error = JobStatus.FAILED, f"{type(exc).__name__}: {exc}"[:2000]
+    finally:
+        # keep the worker's memory flat between jobs (see ai/models/memory.py)
+        release_models()
 
     with session_factory() as session:
         session.execute(

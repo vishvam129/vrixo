@@ -23,5 +23,10 @@ RUN useradd --create-home --uid 1000 vrixo && mkdir -p /data/storage /data/model
     && chown -R vrixo:vrixo /data
 USER vrixo
 
+# rembg's matting code (pymatting) is JIT-compiled by numba on first import,
+# which takes about a minute. Do it once here so the cache is part of the
+# image, instead of the first background-removal job of every new container.
+RUN python -c "import rembg"
+
 EXPOSE 8000
 CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
